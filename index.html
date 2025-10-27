@@ -38,6 +38,16 @@
             transform: scale(1.03);
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
+        /* Shake animation for review input error */
+        @keyframes shake {
+            10%, 90% { transform: translateX(-1px); }
+            20%, 80% { transform: translateX(2px); }
+            30%, 50%, 70% { transform: translateX(-4px); }
+            40%, 60% { transform: translateX(4px); }
+        }
+        .animate-shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
@@ -102,8 +112,8 @@
                 </div>
             </div>
 
-            <!-- [NEW] Review Section (hidden by default) -->
-            <div id="review-section" class="mt-6">
+            <!-- Review Section (hidden by default) -->
+            <div id="review-section" class="mt-6 hidden">
                 <h3 class="text-xl font-bold text-gray-800 mb-3">💬 이 메뉴 리뷰</h3>
                 <!-- Review Form -->
                 <div class="flex gap-2 mb-4">
@@ -154,11 +164,11 @@
     </div>
 
 
-    <!-- [NEW] Firebase SDKs -->
+    <!-- [NEW] Firebase SDKs (v12.4.0) -->
     <script type="module">
-        // Firebase SDKs
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Firebase SDKs - v12.4.0
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
         import { 
             getFirestore, 
             collection, 
@@ -168,7 +178,7 @@
             orderBy, 
             serverTimestamp,
             setLogLevel // for debugging
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
         // DOM 요소 가져오기
         const sheetUrlInput = document.getElementById('sheet-url');
@@ -188,7 +198,7 @@
         const modalImageContent = document.getElementById('modal-image-content');
         const modalClose = document.getElementById('modal-close');
 
-        // [NEW] Review elements
+        // Review elements
         const reviewSection = document.getElementById('review-section');
         const reviewInput = document.getElementById('review-input');
         const submitReviewButton = document.getElementById('submit-review-button');
@@ -199,41 +209,50 @@
         let menuList = [];
         let isSpinning = false;
 
-        // [NEW] Firebase and Review variables
+        // Firebase and Review variables
         let db, auth, appId, userId;
         let currentPickedItem = null;
         let currentReviewUnsubscribe = null; // 현재 구독중인 리뷰 리스너
 
-        // --- [NEW] Firebase 초기화 및 인증 ---
+        // --- [NEW] Firebase 초기화 및 인증 (GitHub Pages용) ---
         async function initializeFirebase() {
             try {
-                // __firebase_config와 __app_id는 캔버스 환경에서 자동으로 제공됩니다.
-                const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
-                const firebaseConfig = JSON.parse(firebaseConfigStr);
-                
-                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-lunch-app';
+                // [중요!] 여기에 1단계에서 복사한 firebaseConfig 객체를 붙여넣으세요.
+                // 이것은 사용자님 고유의 '열쇠'입니다.
+                const firebaseConfig = {
+                    apiKey: "AIzaSyBDyz1Ti1Oo8K44JHogdLKdGIQILTp2sgI",
+                    authDomain: "my-lunch-roulette.firebaseapp.com",
+                    projectId: "my-lunch-roulette",
+                    storageBucket: "my-lunch-roulette.firebasestorage.app",
+                    messagingSenderId: "72237589697",
+                    appId: "1:72237589697:web:e2d66bd1a96da08d432040",
+                    measurementId: "G-T6GEZC0GG8"
+                };
+
+                // [중요!] Firestore 데이터 경로를 위한 고유 앱 ID
+                // (Firebase 프로젝트 ID와 달라도 됩니다. 우리 앱끼리 데이터를 구분하는 용도)
+                const appIdString = "my-lunch-roulette-app"; // 이 값을 사용합니다.
+
 
                 if (!firebaseConfig.apiKey) {
                     console.error("Firebase config is missing.");
-                    errorText.textContent = "리뷰 기능을 초기화할 수 없습니다.";
+                    errorText.textContent = "리뷰 기능을 초기화할 수 없습니다. (Config 누락)";
                     errorText.classList.remove('hidden');
                     return;
                 }
+                
+                appId = appIdString; // 전역 변수에 할당
 
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 setLogLevel('Debug'); // 디버그 로그 활성화
 
-                // 인증 (커스텀 토큰 또는 익명)
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                // GitHub Pages에서는 항상 익명 로그인 사용
+                await signInAnonymously(auth);
                 
                 userId = auth.currentUser?.uid || `anon-${Math.random().toString(36).substr(2, 9)}`;
-                console.log("Firebase initialized. User ID:", userId);
+                console.log("Firebase initialized for GitHub Pages. User ID:", userId);
                 
             } catch (err) {
                 console.error("Firebase init error:", err);
@@ -268,7 +287,25 @@
                     .map(row => row.trim())
                     .filter(row => row.length > 0)
                     .map(row => {
-                        const parts = row.split(','); // 간단한 쉼표 구분
+                        // CSV 파싱 개선: 쉼표가 포함된 문자열 처리 (기본적인 형태)
+                        // "이름,A",B,C,D -> ["이름,A", B, C, D]
+                        // "따옴표"로 묶인 필드 내의 쉼표는 무시하는 간단한 파서
+                        const parts = [];
+                        let currentPart = '';
+                        let inQuote = false;
+                        for (let i = 0; i < row.length; i++) {
+                            const char = row[i];
+                            if (char === '"') {
+                                inQuote = !inQuote;
+                            } else if (char === ',' && !inQuote) {
+                                parts.push(currentPart.trim().replace(/^"|"$/g, '')); // 앞뒤 따옴표 제거
+                                currentPart = '';
+                            } else {
+                                currentPart += char;
+                            }
+                        }
+                        parts.push(currentPart.trim().replace(/^"|"$/g, '')); // 마지막 부분 추가
+
                         return {
                             name: parts[0] || '이름 없음',
                             locationImg: parts[1] || '', // B열: 가는 길 이미지
@@ -276,10 +313,10 @@
                             foodImg: parts[3] || ''      // D열: 음식 이미지
                         };
                     })
-                    .filter(item => item.name !== '이름 없음' && item.name.length > 0); // 이름이 있는 메뉴만 필터링
+                    .filter(item => item.name !== '이름 없음' && item.name.length > 0 && item.name !== '식당/메뉴 이름'); // 헤더(A1) 행 제외
 
                 if (menuList.length === 0) {
-                    throw new Error('시트에서 메뉴를 찾을 수 없거나 A열이 비어있습니다.');
+                    throw new Error('시트에서 메뉴를 찾을 수 없거나 A열이 비어있습니다. (A1 헤더 제외 1개 이상 필요)');
                 }
                 
                 pickButton.disabled = false;
@@ -301,7 +338,7 @@
             isSpinning = true;
             pickButton.disabled = true;
             resultDetails.classList.add('hidden'); // 이전 결과 숨기기
-            reviewSection.classList.add('hidden'); // [NEW] 이전 리뷰 숨기기
+            reviewSection.classList.add('hidden'); // 이전 리뷰 숨기기
 
             // 룰렛 애니메이션
             resultText.classList.add('spinning');
@@ -313,12 +350,15 @@
                 const randomItem = menuList[Math.floor(Math.random() * menuList.length)];
                 resultText.textContent = randomItem.name;
                 
-                if (spinCount > 20) { // 약 2초간 스핀 (20 * 100ms)
+                // 스핀 시간을 1.5초 ~ 2.5초 사이로 랜덤하게 조절
+                const randomSpinDuration = Math.random() * 10 + 15; // 15 ~ 25회 (1.5초 ~ 2.5초)
+                
+                if (spinCount > randomSpinDuration) {
                     clearInterval(spinInterval);
                     
                     // 최종 메뉴 선택
                     const pickedItem = menuList[Math.floor(Math.random() * menuList.length)];
-                    currentPickedItem = pickedItem; // [NEW] 현재 뽑힌 메뉴 저장
+                    currentPickedItem = pickedItem; // 현재 뽑힌 메뉴 저장
 
                     resultText.textContent = pickedItem.name;
                     resultText.classList.remove('spinning');
@@ -332,7 +372,7 @@
                         isSpinning = false;
                         pickButton.disabled = false;
                         
-                        // [NEW] 리뷰 로드
+                        // 리뷰 로드
                         if(db) { // Firestore가 성공적으로 초기화되었을 때만
                             loadReviews(pickedItem.name);
                         }
@@ -344,23 +384,26 @@
         // --- 결과 상세 정보 업데이트 ---
         function updateResultDetails(item) {
             // B열: 가는 길 이미지
-            if (item.locationImg) {
+            if (item.locationImg && item.locationImg.startsWith('http')) {
                 locationImage.src = item.locationImg;
                 locationInfo.classList.remove('hidden');
             } else {
                 locationInfo.classList.add('hidden');
             }
             // C열: 메뉴판 이미지
-            menuImage.src = item.menuImg || 'https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu';
+            menuImage.src = (item.menuImg && item.menuImg.startsWith('http')) ? item.menuImg : 'https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu';
             // D열: 음식 이미지
-            foodImage.src = item.foodImg || 'https://placehold.co/300x300/e2e8f0/94a3b8?text=Food';
+            foodImage.src = (item.foodImg && item.foodImg.startsWith('http')) ? item.foodImg : 'https://placehold.co/300x300/e2e8f0/94a3b8?text=Food';
 
             resultDetails.classList.remove('hidden');
         }
 
-        // [NEW] --- 리뷰 불러오기 (Firestore onSnapshot) ---
+        // --- 리뷰 불러오기 (Firestore onSnapshot) ---
         function loadReviews(restaurantName) {
-            if (!db || !appId) return;
+            if (!db || !appId) {
+                console.error("Firestore DB or AppID is not initialized.");
+                return;
+            }
 
             // 기존에 구독중인 리스너가 있다면 해제 (다른 메뉴를 뽑았을 경우)
             if (currentReviewUnsubscribe) {
@@ -372,15 +415,12 @@
             reviewPlaceholder.textContent = '리뷰를 불러오는 중...';
             reviewPlaceholder.classList.remove('hidden');
 
-            // Firestore 경로 생성
-            // A열의 식당/메뉴 이름을 ID로 사용합니다.
-            const collectionPath = `artifacts/${appId}/public/data/lunch-reviews/${restaurantName}/reviews`;
+            // Firestore 경로 생성 (메뉴 이름에 특수문자(./)가 있으면 경로로 인식되므로 치환)
+            const safeRestaurantName = restaurantName.replace(/[.\/]/g, '_'); // . 이나 / 를 _로 변경
+            const collectionPath = `artifacts/${appId}/public/data/lunch-reviews/${safeRestaurantName}/reviews`;
             const reviewsCollection = collection(db, collectionPath);
             
             // 타임스탬프 기준으로 내림차순 정렬 쿼리 (최신순)
-            // 참고: Firestore는 기본적으로 orderBy를 사용하려면 색인이 필요할 수 있습니다.
-            // 여기서는 'timestamp' 필드에 대한 단일 색인을 가정합니다.
-            // 만약 색인 오류가 콘솔에 나타나면, orderBy를 제거하고 클라이언트에서 정렬해야 할 수 있습니다.
             const q = query(reviewsCollection, orderBy("timestamp", "desc"));
 
             console.log(`Listening for reviews at: ${collectionPath}`);
@@ -400,12 +440,12 @@
                         
                         const textEl = document.createElement('p');
                         textEl.textContent = review.text;
-                        textEl.className = 'text-gray-800';
+                        textEl.className = 'text-gray-800 break-words'; // 긴 단어 줄바꿈
                         reviewEl.appendChild(textEl);
 
                         if (review.timestamp) {
                             const dateEl = document.createElement('p');
-                            dateEl.textContent = new Date(review.timestamp.seconds * 1000).toLocaleString('ko-KR');
+                            dateEl.textContent = new Date(review.timestamp.seconds * 1000).toLocaleString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                             dateEl.className = 'text-xs text-gray-400 mt-1 text-right';
                             reviewEl.appendChild(dateEl);
                         }
@@ -414,18 +454,24 @@
                 }
             }, (error) => {
                 console.error("Error fetching reviews: ", error);
-                reviewPlaceholder.textContent = '리뷰를 불러오는 중 오류가 발생했습니다.';
+                // Firestore 색인 오류 감지
+                if (error.code === 'failed-precondition') {
+                     reviewPlaceholder.textContent = '리뷰 로딩 오류 (색인 필요). 콘솔을 확인하세요.';
+                     console.error("FIRESTORE ERROR: ", error.message);
+                     console.log("Firestore 색인 자동 생성 링크 (위 메시지의 URL을 클릭하세요):");
+                } else {
+                    reviewPlaceholder.textContent = '리뷰를 불러오는 중 오류가 발생했습니다.';
+                }
                 reviewPlaceholder.classList.remove('hidden');
             });
         }
 
-        // [NEW] --- 리뷰 제출 함수 (Firestore addDoc) ---
+        // --- 리뷰 제출 함수 (Firestore addDoc) ---
         async function submitReview() {
             if (!db || !appId || !currentPickedItem) return;
 
             const reviewText = reviewInput.value.trim();
             if (reviewText.length === 0) {
-                // alert() 대신 UI 피드백 (예: input 흔들기 또는 메시지 표시)
                 reviewInput.classList.add('border-red-500', 'animate-shake');
                 reviewInput.placeholder = "리뷰 내용을 입력해주세요!";
                 setTimeout(() => {
@@ -439,12 +485,12 @@
             submitReviewButton.textContent = "등록중...";
 
             try {
-                const restaurantName = currentPickedItem.name;
-                const collectionPath = `artifacts/${appId}/public/data/lunch-reviews/${restaurantName}/reviews`;
+                const safeRestaurantName = currentPickedItem.name.replace(/[.\/]/g, '_');
+                const collectionPath = `artifacts/${appId}/public/data/lunch-reviews/${safeRestaurantName}/reviews`;
                 
                 await addDoc(collection(db, collectionPath), {
                     text: reviewText,
-                    author: userId, // 익명 ID 또는 사용자 ID
+                    author: userId, // 익명 ID
                     timestamp: serverTimestamp() // 서버 시간 기준 타임스탬프
                 });
 
@@ -452,7 +498,6 @@
 
             } catch (error) {
                 console.error("Error adding review: ", error);
-                // alert() 대신 errorText 사용
                 errorText.textContent = `리뷰 등록 오류: ${error.message}`;
                 errorText.classList.remove('hidden');
             } finally {
@@ -468,7 +513,7 @@
 
             // Modal functionality
             function openModal(src) {
-                if (src && !src.includes('placehold.co')) { 
+                if (src && !src.includes('placehold.co') && src.startsWith('http')) { 
                     modalImageContent.src = src;
                     imageModal.classList.remove('hidden');
                     document.body.style.overflow = 'hidden';
@@ -492,21 +537,21 @@
                 }
             });
 
-            // [NEW] Review submit listener
+            // Review submit listener
             submitReviewButton.addEventListener('click', submitReview);
             reviewInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
+                    e.preventDefault(); // Form submit 방지
                     submitReview();
                 }
             });
         }
 
         // --- 페이지 로드 시 실행 ---
-        // DOM이 로드된 후 스크립트 실행
         window.addEventListener('DOMContentLoaded', async () => {
             console.log("DOM 로드 완료. 스크립트 실행 시작.");
 
-            // [NEW] Firebase 초기화
+            // Firebase 초기화 (GitHub Pages용)
             await initializeFirebase();
             
             // 이벤트 리스너 설정
