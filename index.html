@@ -141,7 +141,7 @@
                     <ul class="list-disc list-inside">
                         <li>A열: 식당/메뉴 이름 (필수)</li>
                         <li>B열: 가는 길/위치 (이미지 URL)</li>
-                        <li>C열: 메뉴판 (이미지 URL)</li>
+<li>C열: 메뉴판 (이미지 URL)</li>
                         <li>D열: 음식/후기 사진 (이미지 URL)</li>
                     </ul>
                 </div>
@@ -164,7 +164,7 @@
     </div>
 
 
-    <!-- [NEW] Firebase SDKs (v12.4.0) -->
+    <!-- Firebase SDKs (v12.4.0) -->
     <script type="module">
         // Firebase SDKs - v12.4.0
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
@@ -214,7 +214,7 @@
         let currentPickedItem = null;
         let currentReviewUnsubscribe = null; // 현재 구독중인 리뷰 리스너
 
-        // --- [NEW] Firebase 초기화 및 인증 (GitHub Pages용) ---
+        // --- Firebase 초기화 및 인증 (GitHub Pages용) ---
         async function initializeFirebase() {
             try {
                 // [중요!] 여기에 1단계에서 복사한 firebaseConfig 객체를 붙여넣으세요.
@@ -248,10 +248,12 @@
                 auth = getAuth(app);
                 setLogLevel('Debug'); // 디버그 로그 활성화
 
+                // [FIXED] 익명 로그인 및 userId 할당 타이밍 문제 수정
                 // GitHub Pages에서는 항상 익명 로그인 사용
-                await signInAnonymously(auth);
+                console.log("Attempting anonymous sign-in...");
+                const userCredential = await signInAnonymously(auth);
+                userId = userCredential.user.uid; // 로그인 성공 직후 userId를 확실하게 할당
                 
-                userId = auth.currentUser?.uid || `anon-${Math.random().toString(36).substr(2, 9)}`;
                 console.log("Firebase initialized for GitHub Pages. User ID:", userId);
                 
             } catch (err) {
@@ -339,6 +341,7 @@
             pickButton.disabled = true;
             resultDetails.classList.add('hidden'); // 이전 결과 숨기기
             reviewSection.classList.add('hidden'); // 이전 리뷰 숨기기
+            errorText.classList.add('hidden'); // 이전 오류 숨기기
 
             // 룰렛 애니메이션
             resultText.classList.add('spinning');
@@ -373,8 +376,13 @@
                         pickButton.disabled = false;
                         
                         // 리뷰 로드
-                        if(db) { // Firestore가 성공적으로 초기화되었을 때만
+                        if(db && userId) { // Firestore와 userId가 모두 준비되었을 때만
                             loadReviews(pickedItem.name);
+                        } else {
+                            console.warn("DB or UserID not ready, cannot load reviews.");
+                            if (!db) errorText.textContent = "리뷰 DB에 연결되지 않았습니다.";
+                            if (!userId) errorText.textContent = "리뷰 사용자 인증에 실패했습니다.";
+                            errorText.classList.remove('hidden');
                         }
                     }, 500); // pop 애니메이션 시간
                 }
@@ -414,6 +422,7 @@
             reviewList.innerHTML = ''; // 기존 목록 비우기
             reviewPlaceholder.textContent = '리뷰를 불러오는 중...';
             reviewPlaceholder.classList.remove('hidden');
+            errorText.classList.add('hidden'); // 리뷰 로드 시작 시 오류 숨기기
 
             // Firestore 경로 생성 (메뉴 이름에 특수문자(./)가 있으면 경로로 인식되므로 치환)
             const safeRestaurantName = restaurantName.replace(/[.\/]/g, '_'); // . 이나 / 를 _로 변경
@@ -468,7 +477,13 @@
 
         // --- 리뷰 제출 함수 (Firestore addDoc) ---
         async function submitReview() {
-            if (!db || !appId || !currentPickedItem) return;
+            // [FIXED] userId가 확실히 있는지 다시 한번 확인
+            if (!db || !appId || !currentPickedItem || !userId) {
+                console.error("Review submission failed. Missing critical data.", { db, appId, currentPickedItem, userId });
+                errorText.textContent = `리뷰 등록 오류: 사용자 인증(userId)이 누락되었습니다. 페이지를 새로고침해주세요.`;
+                errorText.classList.remove('hidden');
+                return;
+            }
 
             const reviewText = reviewInput.value.trim();
             if (reviewText.length === 0) {
@@ -483,6 +498,7 @@
 
             submitReviewButton.disabled = true;
             submitReviewButton.textContent = "등록중...";
+            errorText.classList.add('hidden'); // 이전 오류 숨기기
 
             try {
                 const safeRestaurantName = currentPickedItem.name.replace(/[.\/]/g, '_');
@@ -490,7 +506,7 @@
                 
                 await addDoc(collection(db, collectionPath), {
                     text: reviewText,
-                    author: userId, // 익명 ID
+                    author: userId, // [FIXED] 이제 userId가 확실히 보장됨
                     timestamp: serverTimestamp() // 서버 시간 기준 타임스탬프
                 });
 
