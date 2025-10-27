@@ -102,13 +102,8 @@
                 </div>
             </div>
 
-            <!-- Gemini AI 추천사 -->
-            <div id="gemini-suggestion-box" class="mt-6 hidden">
-                <h3 class="text-xl font-bold text-gray-800 mb-2">🤖 AI의 강력 추천!</h3>
-                <div id="gemini-suggestion-text" class="text-gray-700 bg-gray-50 p-4 rounded-lg shadow-inner min-h-[50px] whitespace-pre-wrap">
-                    AI가 추천 이유를 생성 중입니다...
-                </div>
-            </div>
+            <!-- Gemini AI 추천사 (REMOVED) -->
+            <!-- 이 섹션이 삭제되었습니다. -->
 
             <!-- [NEW] Review Section (hidden by default) -->
             <div id="review-section" class="mt-6">
@@ -252,54 +247,9 @@
             }
         }
 
-        // --- Gemini API 호출 함수 ---
-        async function getGeminiSuggestion(menuName) {
-            // ... (Gemini API 함수 - 기존과 동일)
-            geminiSuggestionBox.classList.remove('hidden');
-            geminiSuggestionText.textContent = "AI가 추천 이유를 생성 중입니다...";
-
-            const apiKey = ""; // API 키 (캔버스 환경에서 자동 제공)
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-            
-            const systemPrompt = "You are a witty and enthusiastic food critic. Your job is to provide a compelling, fun, and slightly exaggerated reason why the chosen lunch menu is the absolute perfect choice for today. Respond in Korean, in a single concise paragraph.";
-            const userQuery = `오늘 점심 메뉴로 '${menuName}'이(가) 뽑혔어. 왜 이게 오늘 점심으로 완벽한 선택인지 재치있게 추천해줘.`;
-
-            const payload = {
-                contents: [{ parts: [{ text: userQuery }] }],
-                systemInstruction: {
-                    parts: [{ text: systemPrompt }]
-                },
-                generationConfig: {
-                    temperature: 0.8,
-                    topP: 0.9,
-                }
-            };
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    throw new Error(`API Error: ${response.statusText}`);
-                }
-
-                const result = await response.json();
-                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-                if (text) {
-                    geminiSuggestionText.textContent = text;
-                } else {
-                    throw new Error("No content found in API response.");
-                }
-
-            } catch (error) {
-                console.error('Error fetching Gemini suggestion:', error);
-                geminiSuggestionText.textContent = 'AI가 지금 바쁜가 봐요. 맛있게 드세요!';
-            }
-        }
+        // --- Gemini API 호출 함수 (REMOVED) ---
+        // async function getGeminiSuggestion(menuName) { ... }
+        // 이 함수 전체가 삭제되었습니다.
 
 
         // --- 메뉴 불러오기 함수 ---
@@ -395,8 +345,10 @@
                         resultText.classList.remove('result-pop');
                         isSpinning = false;
                         pickButton.disabled = false;
-                        // AI 추천 호출
-                        getGeminiSuggestion(pickedItem.name);
+                        
+                        // AI 추천 호출 (REMOVED)
+                        // getGeminiSuggestion(pickedItem.name); 
+                        
                         // [NEW] 리뷰 로드
                         if(db) { // Firestore가 성공적으로 초기화되었을 때만
                             loadReviews(pickedItem.name);
@@ -580,4 +532,5 @@
     </script>
 </body>
 </html>
+
 
