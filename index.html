@@ -56,7 +56,8 @@
         
         <!-- 헤더 -->
         <header class="text-center mb-6">
-            <h1 class="text-3xl md:text-4xl font-bold text-indigo-600">오늘 뭐 먹지? 😋</h1>
+            <!-- [ADMIN] '오늘 뭐 먹지?' h1에 secret-admin-trigger 클래스(혹은 ID) 추가 -->
+            <h1 id="admin-trigger" class="text-3xl md:text-4xl font-bold text-indigo-600 cursor-pointer" title="Admin mode?">오늘 뭐 먹지? 😋</h1>
             <p class="text-gray-500 mt-2">버튼을 눌러 점심 메뉴를 뽑아보세요!</p>
         </header>
 
@@ -164,6 +165,22 @@
         </div>
     </div>
 
+    <!-- [NEW] Delete Confirmation Modal -->
+    <div id="delete-confirm-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 class="text-lg font-bold mb-4">리뷰 삭제 (관리자)</h3>
+            <p class="text-gray-600 mb-6">이 리뷰를 정말 삭제하시겠습니까? 되돌릴 수 없습니다.</p>
+            <div class="flex justify-end gap-3">
+                <button id="delete-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">
+                    취소
+                </button>
+                <button id="delete-confirm-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                    삭제
+                </button>
+            </div>
+        </div>
+    </div>
+
 
     <!-- Firebase SDKs (v12.4.0) -->
     <script type="module">
@@ -178,7 +195,9 @@
             query, 
             orderBy, 
             serverTimestamp,
-            setLogLevel // for debugging
+            setLogLevel, // for debugging
+            doc,         // [NEW] Import doc
+            deleteDoc    // [NEW] Import deleteDoc
         } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
         // DOM 요소 가져오기
@@ -206,6 +225,11 @@
         const reviewList = document.getElementById('review-list');
         const reviewPlaceholder = document.getElementById('review-placeholder');
 
+        // [NEW] Delete Modal elements
+        const deleteConfirmModal = document.getElementById('delete-confirm-modal');
+        const deleteCancelBtn = document.getElementById('delete-cancel-btn');
+        const deleteConfirmBtn = document.getElementById('delete-confirm-btn');
+
         // 전역 변수
         let menuList = [];
         let isSpinning = false;
@@ -214,6 +238,11 @@
         let db, auth, appId, userId;
         let currentPickedItem = null;
         let currentReviewUnsubscribe = null; // 현재 구독중인 리뷰 리스너
+        
+        // [NEW] Admin Mode variables
+        let isAdmin = false;
+        let adminClickCount = 0;
+        let reviewToDelete = { reviewId: null, safeRestaurantName: null }; // 삭제할 리뷰 정보
 
         // --- Firebase 초기화 및 인증 (GitHub Pages용) ---
         async function initializeFirebase() {
@@ -450,8 +479,11 @@
                     reviewPlaceholder.classList.add('hidden');
                     snapshot.forEach((doc) => {
                         const review = doc.data();
+                        const reviewId = doc.id; // [NEW] Get the document ID
+
                         const reviewEl = document.createElement('div');
-                        reviewEl.className = 'bg-white p-3 rounded-md shadow-sm border border-gray-200';
+                        // [NEW] Add relative positioning and padding for the delete button
+                        reviewEl.className = 'bg-white p-3 rounded-md shadow-sm border border-gray-200 relative pr-10';
                         
                         const textEl = document.createElement('p');
                         textEl.textContent = review.text;
@@ -464,6 +496,25 @@
                             dateEl.className = 'text-xs text-gray-400 mt-1 text-right';
                             reviewEl.appendChild(dateEl);
                         }
+
+                        // [NEW] '관리자 모드'가 켜져 있으면 'X' 버튼 표시
+                        // (참고: review.author === userId 조건은 관리자 요청에 따라 제거됨)
+                        if (isAdmin) {
+                            const deleteButton = document.createElement('button');
+                            deleteButton.innerHTML = '&times;'; // 'X' icon
+                            deleteButton.className = 'absolute top-1/2 -translate-y-1/2 right-2 text-gray-400 hover:text-red-500 font-bold text-2xl leading-none p-2';
+                            deleteButton.title = '리뷰 삭제 (관리자)';
+                            
+                            deleteButton.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                // Store deletion info and show modal
+                                reviewToDelete = { reviewId: reviewId, safeRestaurantName: safeRestaurantName };
+                                deleteConfirmModal.classList.remove('hidden');
+                                document.body.style.overflow = 'hidden'; // Stop background scrolling
+                            });
+                            reviewEl.appendChild(deleteButton);
+                        }
+
                         reviewList.appendChild(reviewEl);
                     });
                 }
@@ -533,6 +584,34 @@
             }
         }
 
+        // [NEW] --- 리뷰 삭제 함수 (Firestore deleteDoc) ---
+        async function deleteReview() {
+            const { reviewId, safeRestaurantName } = reviewToDelete;
+            if (!db || !appId || !reviewId || !safeRestaurantName) {
+                console.error("Deletion failed. Missing data.");
+                errorText.textContent = "리뷰 삭제 오류: 정보가 누락되었습니다.";
+                errorText.classList.remove('hidden');
+                return;
+            }
+
+            const collectionPath = `artifacts/${appId}/public/data/lunch-reviews/${safeRestaurantName}/reviews`;
+            const docRef = doc(db, collectionPath, reviewId); // 삭제할 문서의 참조 생성
+
+            try {
+                await deleteDoc(docRef); // 문서 삭제
+                console.log("Admin deleted review:", reviewId);
+            } catch (error) {
+                console.error("Error deleting review: ", error);
+                errorText.textContent = `리뷰 삭제 오류: ${error.message}`;
+                errorText.classList.remove('hidden');
+            } finally {
+                // Reset deletion info and hide modal
+                reviewToDelete = { reviewId: null, safeRestaurantName: null };
+                deleteConfirmModal.classList.add('hidden');
+                document.body.style.overflow = 'auto'; // Re-enable background scrolling
+            }
+        }
+
         // --- 이벤트 리스너 ---
         function setupEventListeners() {
             loadButton.addEventListener('click', loadMenus);
@@ -572,6 +651,40 @@
                     submitReview();
                 }
             });
+
+            // [NEW] Admin mode secret trigger
+            document.getElementById('admin-trigger').addEventListener('click', () => {
+                adminClickCount++;
+                if (adminClickCount >= 5) {
+                    isAdmin = true;
+                    adminClickCount = 0; // Reset
+                    console.warn("--- ADMIN MODE ACTIVATED ---");
+                    errorText.textContent = "관리자 모드가 활성화되었습니다. (모든 리뷰 삭제 가능)";
+                    errorText.classList.remove('hidden', 'text-red-500');
+                    errorText.classList.add('text-green-600', 'font-bold');
+                    
+                    // Refresh reviews to show delete buttons
+                    if (currentPickedItem) {
+                        loadReviews(currentPickedItem.name);
+                    }
+                    setTimeout(() => {
+                         errorText.classList.add('hidden');
+                         errorText.classList.add('text-red-500'); // Reset color
+                         errorText.classList.remove('text-green-600', 'font-bold');
+                    }, 3000); // Hide message after 3s
+                }
+                 // 짧은 시간 안에 5번 누르도록 타이머 설정 (선택 사항)
+                setTimeout(() => { adminClickCount = 0; }, 1500); // 1.5초 안에 5번
+            });
+
+            // [NEW] Delete modal listeners
+            deleteCancelBtn.addEventListener('click', () => {
+                deleteConfirmModal.classList.add('hidden');
+                document.body.style.overflow = 'auto';
+                reviewToDelete = { reviewId: null, safeRestaurantName: null };
+            });
+            deleteConfirmBtn.addEventListener('click', deleteReview);
+
         }
 
         // --- 페이지 로드 시 실행 ---
