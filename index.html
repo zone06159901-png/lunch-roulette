@@ -29,7 +29,7 @@
         .result-pop {
             animation: pop 0.5s ease-out forwards;
         }
-        /* [NEW] Clickable images */
+        /* Clickable images */
         .clickable-img {
             cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
@@ -101,9 +101,6 @@
                          onerror="this.src='https://placehold.co/300x300/e2e8f0/94a3b8?text=Food'; this.alt='음식 사진 없음';">
                 </div>
             </div>
-
-            <!-- Gemini AI 추천사 (REMOVED) -->
-            <!-- 이 섹션이 삭제되었습니다. -->
 
             <!-- [NEW] Review Section (hidden by default) -->
             <div id="review-section" class="mt-6">
@@ -185,9 +182,7 @@
         const locationImage = document.getElementById('location-image');
         const menuImage = document.getElementById('menu-image');
         const foodImage = document.getElementById('food-image');
-        const geminiSuggestionBox = document.getElementById('gemini-suggestion-box');
-        const geminiSuggestionText = document.getElementById('gemini-suggestion-text');
-
+        
         // Modal elements
         const imageModal = document.getElementById('image-modal');
         const modalImageContent = document.getElementById('modal-image-content');
@@ -247,14 +242,8 @@
             }
         }
 
-        // --- Gemini API 호출 함수 (REMOVED) ---
-        // async function getGeminiSuggestion(menuName) { ... }
-        // 이 함수 전체가 삭제되었습니다.
-
-
         // --- 메뉴 불러오기 함수 ---
         async function loadMenus() {
-            // ... (기존 loadMenus 함수 로직)
             const url = sheetUrlInput.value;
             if (!url) {
                 errorText.textContent = 'Google Sheets URL을 입력하세요.';
@@ -279,8 +268,6 @@
                     .map(row => row.trim())
                     .filter(row => row.length > 0)
                     .map(row => {
-                        // CSV 파싱 (따옴표로 묶인 쉼표 무시 - 간단한 버전)
-                        // 더 복잡한 CSV는 라이브러리가 필요하지만, 이 경우 4개 열로 가정합니다.
                         const parts = row.split(','); // 간단한 쉼표 구분
                         return {
                             name: parts[0] || '이름 없음',
@@ -314,7 +301,6 @@
             isSpinning = true;
             pickButton.disabled = true;
             resultDetails.classList.add('hidden'); // 이전 결과 숨기기
-            geminiSuggestionBox.classList.add('hidden'); // 이전 AI 추천 숨기기
             reviewSection.classList.add('hidden'); // [NEW] 이전 리뷰 숨기기
 
             // 룰렛 애니메이션
@@ -346,9 +332,6 @@
                         isSpinning = false;
                         pickButton.disabled = false;
                         
-                        // AI 추천 호출 (REMOVED)
-                        // getGeminiSuggestion(pickedItem.name); 
-                        
                         // [NEW] 리뷰 로드
                         if(db) { // Firestore가 성공적으로 초기화되었을 때만
                             loadReviews(pickedItem.name);
@@ -360,7 +343,6 @@
 
         // --- 결과 상세 정보 업데이트 ---
         function updateResultDetails(item) {
-            // ... (기존 updateResultDetails 함수 로직)
             // B열: 가는 길 이미지
             if (item.locationImg) {
                 locationImage.src = item.locationImg;
@@ -391,10 +373,14 @@
             reviewPlaceholder.classList.remove('hidden');
 
             // Firestore 경로 생성
+            // A열의 식당/메뉴 이름을 ID로 사용합니다.
             const collectionPath = `artifacts/${appId}/public/data/lunch-reviews/${restaurantName}/reviews`;
             const reviewsCollection = collection(db, collectionPath);
             
-            // 타임스탬프 기준으로 내림차순 정렬 쿼리
+            // 타임스탬프 기준으로 내림차순 정렬 쿼리 (최신순)
+            // 참고: Firestore는 기본적으로 orderBy를 사용하려면 색인이 필요할 수 있습니다.
+            // 여기서는 'timestamp' 필드에 대한 단일 색인을 가정합니다.
+            // 만약 색인 오류가 콘솔에 나타나면, orderBy를 제거하고 클라이언트에서 정렬해야 할 수 있습니다.
             const q = query(reviewsCollection, orderBy("timestamp", "desc"));
 
             console.log(`Listening for reviews at: ${collectionPath}`);
@@ -439,7 +425,13 @@
 
             const reviewText = reviewInput.value.trim();
             if (reviewText.length === 0) {
-                alert("리뷰 내용을 입력해주세요.");
+                // alert() 대신 UI 피드백 (예: input 흔들기 또는 메시지 표시)
+                reviewInput.classList.add('border-red-500', 'animate-shake');
+                reviewInput.placeholder = "리뷰 내용을 입력해주세요!";
+                setTimeout(() => {
+                    reviewInput.classList.remove('border-red-500', 'animate-shake');
+                    reviewInput.placeholder = "한 줄 리뷰를 남겨주세요...";
+                }, 1000);
                 return;
             }
 
@@ -460,13 +452,14 @@
 
             } catch (error) {
                 console.error("Error adding review: ", error);
-                alert(`리뷰 등록 중 오류가 발생했습니다: ${error.message}`);
+                // alert() 대신 errorText 사용
+                errorText.textContent = `리뷰 등록 오류: ${error.message}`;
+                errorText.classList.remove('hidden');
             } finally {
                 submitReviewButton.disabled = false;
                 submitReviewButton.textContent = "등록";
             }
         }
-
 
         // --- 이벤트 리스너 ---
         function setupEventListeners() {
@@ -532,5 +525,4 @@
     </script>
 </body>
 </html>
-
 
