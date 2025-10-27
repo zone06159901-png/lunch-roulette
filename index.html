@@ -21,6 +21,15 @@
         .result-pop {
             animation: pop 0.5s ease-out forwards;
         }
+        /* [NEW] Clickable images */
+        .clickable-img {
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .clickable-img:hover {
+            transform: scale(1.03);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
@@ -69,7 +78,7 @@
                     <!-- 가는 길/위치 (이미지로 변경) -->
                     <div id="location-info" class="hidden">
                         <p class="text-sm font-medium text-gray-500 mb-1">위치/가는 길</p>
-                        <img id="location-image" src="https://placehold.co/600x400/e2e8f0/94a3b8?text=Location" alt="위치/가는 길 이미지" class="w-full h-auto rounded-lg shadow-md aspect-video object-cover" 
+                        <img id="location-image" src="https://placehold.co/600x400/e2e8f0/94a3b8?text=Location" alt="위치/가는 길 이미지" class="w-full h-auto rounded-lg shadow-md aspect-video object-cover clickable-img" 
                              onerror="this.src='https://placehold.co/600x400/e2e8f0/94a3b8?text=Location'; this.alt='위치/가는 길 이미지 없음';">
                     </div>
                     
@@ -77,12 +86,12 @@
                     <div class="grid grid-cols-2 gap-4 mt-4">
                         <div>
                             <p class="text-sm font-medium text-gray-500 mb-1">메뉴판</p>
-                            <img id="menu-image" src="https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu" alt="메뉴판 이미지" class="w-full h-auto rounded-lg shadow-md aspect-square object-cover" 
+                            <img id="menu-image" src="https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu" alt="메뉴판 이미지" class="w-full h-auto rounded-lg shadow-md aspect-square object-cover clickable-img" 
                                  onerror="this.src='https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu'; this.alt='메뉴판 이미지 없음';">
                         </div>
                         <div>
                             <p class="text-sm font-medium text-gray-500 mb-1">후기/음식 사진</p>
-                            <img id="food-image" src="https://placehold.co/300x300/e2e8f0/94a3b8?text=Food" alt="음식 사진" class="w-full h-auto rounded-lg shadow-md aspect-square object-cover"
+                            <img id="food-image" src="https://placehold.co/300x300/e2e8f0/94a3b8?text=Food" alt="음식 사진" class="w-full h-auto rounded-lg shadow-md aspect-square object-cover clickable-img"
                                  onerror="this.src='https://placehold.co/300x300/e2e8f0/94a3b8?text=Food'; this.alt='음식 사진 없음';">
                         </div>
                     </div>
@@ -113,6 +122,20 @@
 
     </div>
 
+    <!-- [NEW] Image Modal Lightbox -->
+    <div id="image-modal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50 hidden transition-opacity duration-300"
+         style="backdrop-filter: blur(5px);">
+        <div class="relative max-w-3xl max-h-full">
+            <img id="modal-image-content" src="" alt="확대 이미지" class="max-w-full max-h-[90vh] rounded-lg shadow-xl">
+            <!-- 닫기 버튼 -->
+            <button id="modal-close" 
+                    class="absolute -top-3 -right-3 bg-white text-gray-700 rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold shadow-lg transition-transform transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white">
+                &times;
+            </button>
+        </div>
+    </div>
+
+
     <script>
         const sheetUrlInput = document.getElementById('sheet-url');
         const loadButton = document.getElementById('load-button');
@@ -126,6 +149,11 @@
         const locationImage = document.getElementById('location-image'); // '가는 길' 이미지 태그
         const menuImage = document.getElementById('menu-image');
         const foodImage = document.getElementById('food-image');
+
+        // [NEW] Modal elements
+        const imageModal = document.getElementById('image-modal');
+        const modalImageContent = document.getElementById('modal-image-content');
+        const modalClose = document.getElementById('modal-close');
 
 
         let menuList = [];
@@ -301,8 +329,37 @@
         // 이벤트 리스너 연결
         loadButton.addEventListener('click', loadMenus);
         pickButton.addEventListener('click', pickMenu);
+        
+        // [NEW] Modal functionality
+        function openModal(src) {
+            // src가 유효하고, 플레이스홀더 이미지가 아닌 경우에만 모달 열기
+            if (src && !src.includes('placehold.co')) { 
+                modalImageContent.src = src;
+                imageModal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden'; // 뒷배경 스크롤 방지
+            }
+        }
+
+        function closeModal() {
+            imageModal.classList.add('hidden');
+            document.body.style.overflow = 'auto'; // 스크롤 복원
+            modalImageContent.src = ''; // 이미지 소스 초기화
+        }
+
+        // [NEW] Image click listeners
+        locationImage.addEventListener('click', () => openModal(locationImage.src));
+        menuImage.addEventListener('click', () => openModal(menuImage.src));
+        foodImage.addEventListener('click', () => openModal(foodImage.src));
+
+        // [NEW] Modal close listeners
+        modalClose.addEventListener('click', closeModal);
+        imageModal.addEventListener('click', (e) => {
+            // 모달의 검은색 배경(e.target)을 클릭했을 때 닫기
+            if (e.target === imageModal) {
+                closeModal();
+            }
+        });
     </script>
 </body>
 </html>
-
 
