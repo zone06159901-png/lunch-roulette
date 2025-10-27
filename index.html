@@ -6,16 +6,24 @@
     <title>오늘 뭐 먹지? 점심 룰렛</title>
     <!-- Tailwind CSS 로드 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         /* Noto Sans KR 폰트를 기본으로 사용 */
         body {
-            font-family: 'Noto Sans KR', 'Inter', sans-serif;
+            font-family: 'Noto Sans KR', sans-serif;
         }
-        /* 뽑기 애니메이션 */
+        /* 룰렛 애니메이션을 위한 키프레임 */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(3600deg); } /* 10바퀴 */
+        }
+        .spinning {
+            animation: spin 3s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+        }
+        /* 결과 팝업 애니메이션 */
         @keyframes pop {
             0% { transform: scale(0.8); opacity: 0; }
-            50% { transform: scale(1.1); opacity: 1; }
+            80% { transform: scale(1.05); opacity: 1; }
             100% { transform: scale(1); opacity: 1; }
         }
         .result-pop {
@@ -34,95 +42,113 @@
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
 
-    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 md:p-8">
+    <div class="bg-white w-full max-w-xl rounded-2xl shadow-xl p-6 md:p-8">
         
+        <!-- 헤더 -->
         <header class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">오늘 뭐 먹지? 🍱</h1>
-            <p class="text-gray-500 mt-2">회사 점심 메뉴 룰렛</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-indigo-600">오늘 뭐 먹지? 😋</h1>
+            <p class="text-gray-500 mt-2">버튼을 눌러 점심 메뉴를 뽑아보세요!</p>
         </header>
 
-        <main>
-            <!-- 1. 구글 시트 URL 입력 (다시 보이도록 수정) -->
-            <div class="mb-4 hidden">
-                <label for="sheet-url" class="block text-sm font-medium text-gray-700 mb-1">
-                    Google Sheets CSV URL
-                </label>
-                <input type="url" id="sheet-url" placeholder="웹에 게시한 .csv URL을 붙여넣으세요"
-                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-            </div>
+        <!-- URL 입력창 (현재 하드코딩으로 숨김) -->
+        <div class="mb-4 hidden">
+            <label for="sheet-url" class="block text-sm font-medium text-gray-700 mb-1">Google Sheets CSV URL</label>
+            <input type="text" id="sheet-url" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                   placeholder="Google Sheets '웹에 게시' .csv URL을 붙여넣으세요.">
+        </div>
+        <button id="load-button" class="w-full bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all mb-4 hidden">
+            메뉴 불러오기
+        </button>
 
-            <!-- '메뉴 불러오기' 버튼 (다시 보이도록 수정) -->
-            <button id="load-button"
-                    class="w-full bg-blue-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-blue-700 transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hidden">
-                메뉴 불러오기
-            </button>
-            <p id="status-message" class="text-xs text-center text-gray-500 mt-2 h-4"></p>
+        <!-- 룰렛 결과 표시 -->
+        <div id="result-display" class="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center text-center p-4 mb-6 shadow-inner overflow-hidden">
+            <span id="result-text" class="text-3xl font-bold text-gray-700 transition-all duration-300">
+                무엇을 먹을까요?
+            </span>
+        </div>
 
-            <!-- 2. 메뉴 뽑기 -->
-            <div class="mt-6 border-t pt-6 text-center">
-                <button id="pick-button"
-                        class="w-full bg-green-500 text-white text-lg font-bold py-3 px-6 rounded-lg hover:bg-green-600 transition-transform transform hover:scale-105 duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                        disabled>
-                    오늘의 메뉴 뽑기! 🥳
-                </button>
-            </div>
-
-            <!-- 3. 결과 표시 -->
-            <div id="result-container" class="mt-6 text-center min-h-[100px] flex flex-col items-center justify-center">
-                <!-- 룰렛 텍스트 -->
-                <p id="result-text" class="text-4xl font-extrabold text-blue-600"></p>
+        <!-- 뽑기 버튼 -->
+        <button id="pick-button" class="w-full bg-indigo-600 text-white text-2xl font-bold py-4 px-6 rounded-lg shadow-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all transform hover:scale-105 disabled:bg-gray-400 disabled:shadow-none disabled:transform-none"
+                disabled>
+            오늘의 메뉴 뽑기! 🥳
+        </button>
+        <p id="loading-text" class="text-center text-gray-500 mt-2 hidden">
+            메뉴를 불러오는 중입니다...
+        </p>
+        <p id="error-text" class="text-center text-red-500 mt-2 hidden"></p>
+        
+        <!-- 뽑힌 메뉴 상세 정보 (숨겨져 있음) -->
+        <div id="result-details" class="mt-6 border-t pt-6 hidden">
+            <!-- 이미지 갤러리 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- 가는 길/위치 (이미지로 변경) -->
+                <div id="location-info" class="hidden">
+                    <p class="text-sm font-medium text-gray-500 mb-1">위치/가는 길</p>
+                    <img id="location-image" src="https://placehold.co/600x400/e2e8f0/94a3b8?text=Location" alt="위치/가는 길 이미지" class="w-full h-auto rounded-lg shadow-md aspect-video object-cover clickable-img" 
+                         onerror="this.src='https://placehold.co/600x400/e2e8f0/94a3b8?text=Location'; this.alt='위치/가는 길 이미지 없음';">
+                </div>
                 
-                <!-- 상세 정보 (숨겨져 있다가 뽑기 완료 후 표시) -->
-                <div id="result-details" class="hidden w-full mt-6 space-y-4">
-                    
-                    <!-- 가는 길/위치 (이미지로 변경) -->
-                    <div id="location-info" class="hidden">
-                        <p class="text-sm font-medium text-gray-500 mb-1">위치/가는 길</p>
-                        <img id="location-image" src="https://placehold.co/600x400/e2e8f0/94a3b8?text=Location" alt="위치/가는 길 이미지" class="w-full h-auto rounded-lg shadow-md aspect-video object-cover clickable-img" 
-                             onerror="this.src='https://placehold.co/600x400/e2e8f0/94a3b8?text=Location'; this.alt='위치/가는 길 이미지 없음';">
-                    </div>
-                    
-                    <!-- 이미지 갤러리 (메뉴판, 음식) -->
-                    <div class="grid grid-cols-2 gap-4 mt-4">
-                        <div>
-                            <p class="text-sm font-medium text-gray-500 mb-1">메뉴판</p>
-                            <img id="menu-image" src="https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu" alt="메뉴판 이미지" class="w-full h-auto rounded-lg shadow-md aspect-square object-cover clickable-img" 
-                                 onerror="this.src='https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu'; this.alt='메뉴판 이미지 없음';">
-                        </div>
-                        <div>
-                            <p class="text-sm font-medium text-gray-500 mb-1">후기/음식 사진</p>
-                            <img id="food-image" src="https://placehold.co/300x300/e2e8f0/94a3b8?text=Food" alt="음식 사진" class="w-full h-auto rounded-lg shadow-md aspect-square object-cover clickable-img"
-                                 onerror="this.src='https://placehold.co/300x300/e2e8f0/94a3b8?text=Food'; this.alt='음식 사진 없음';">
-                        </div>
-                    </div>
+                <!-- 메뉴판 -->
+                <div>
+                    <p class="text-sm font-medium text-gray-500 mb-1">메뉴판</p>
+                    <img id="menu-image" src="https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu" alt="메뉴판 이미지" class="w-full h-auto rounded-lg shadow-md aspect-square object-cover clickable-img" 
+                         onerror="this.src='https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu'; this.alt='메뉴판 이미지 없음';">
+                </div>
+                <!-- 음식 사진 -->
+                <div>
+                    <p class="text-sm font-medium text-gray-500 mb-1">후기/음식 사진</p>
+                    <img id="food-image" src="https://placehold.co/300x300/e2e8f0/94a3b8?text=Food" alt="음식 사진" class="w-full h-auto rounded-lg shadow-md aspect-square object-cover clickable-img"
+                         onerror="this.src='https://placehold.co/300x300/e2e8f0/94a3b8?text=Food'; this.alt='음식 사진 없음';">
                 </div>
             </div>
-        </main>
-        
-        <!-- 사용 방법 안내 (B열 내용 수정) -->
-        <footer class="mt-6 border-t pt-4">
-            <details class="text-gray-600">
-                <summary class="cursor-pointer text-sm font-medium hover:text-gray-800">
-                    ℹ️ Google Sheets 설정 방법
-                </summary>
-                <div class="mt-2 p-3 bg-gray-50 rounded-lg text-xs space-y-1">
-                    <p class="font-bold">반드시 열 순서를 지켜주세요:</p>
-                    <p>∙ <span class="font-semibold">A열:</span> 식당/메뉴 이름 (필수)</p>
-                    <p>∙ <span class="font-semibold">B열:</span> 가는 길/위치 <span class="text-red-600 font-bold">사진 (URL)</span></p>
-                    <p>∙ <span class="font-semibold">C열:</span> 메뉴판 사진 (URL)</p>
-                    <p>∙ <span class="font-semibold">D열:</span> 음식 사진 (URL)</p>
-                    <p class="mt-2">1. Google Sheets에서 위 순서대로 내용을 입력하세요.</p>
-                    <p>2. <span class="font-semibold text-red-600">주의:</span> 모든 이미지는 직접 넣지 말고, 이미지의 'URL 주소'를 B, C, D열에 텍스트로 붙여넣으세요.</p>
-                    <p>3. [파일] > [공유] > [웹에 게시]로 이동하세요.</p>
-                    <p>4. '링크' 탭에서 시트를 선택하고, 형식을 '.csv'로 변경하세요.</p>
-                    <p>5. [게시]를 누르고 생성된 URL을 복사해 위에 붙여넣으세요.</p>
+
+            <!-- Gemini AI 추천사 -->
+            <div id="gemini-suggestion-box" class="mt-6 hidden">
+                <h3 class="text-xl font-bold text-gray-800 mb-2">🤖 AI의 강력 추천!</h3>
+                <div id="gemini-suggestion-text" class="text-gray-700 bg-gray-50 p-4 rounded-lg shadow-inner min-h-[50px] whitespace-pre-wrap">
+                    AI가 추천 이유를 생성 중입니다...
+                </div>
+            </div>
+
+            <!-- [NEW] Review Section (hidden by default) -->
+            <div id="review-section" class="mt-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-3">💬 이 메뉴 리뷰</h3>
+                <!-- Review Form -->
+                <div class="flex gap-2 mb-4">
+                    <input type="text" id="review-input" class="flex-grow w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="한 줄 리뷰를 남겨주세요...">
+                    <button id="submit-review-button" class="flex-shrink-0 bg-indigo-600 text-white font-semibold px-4 py-2 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all">
+                        등록
+                    </button>
+                </div>
+                <!-- Review List -->
+                <div id="review-list" class="space-y-3 max-h-48 overflow-y-auto bg-gray-50 p-3 rounded-lg">
+                    <!-- Reviews will be populated here -->
+                    <p id="review-placeholder" class="text-gray-500 italic text-center">리뷰를 불러오는 중...</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 하단 푸터 (설명서) -->
+        <footer class="mt-8 text-center">
+            <details class="text-sm text-gray-500 cursor-pointer">
+                <summary>사용 방법 (클릭하여 열기)</summary>
+                <div class="mt-2 text-left p-4 bg-gray-50 rounded-lg">
+                    <p>이 프로그램은 Google Sheets와 연동됩니다.</p>
+                    <p class="font-bold mt-2">시트 구조 (총 4열):</p>
+                    <ul class="list-disc list-inside">
+                        <li>A열: 식당/메뉴 이름 (필수)</li>
+                        <li>B열: 가는 길/위치 (이미지 URL)</li>
+                        <li>C열: 메뉴판 (이미지 URL)</li>
+                        <li>D열: 음식/후기 사진 (이미지 URL)</li>
+                    </ul>
                 </div>
             </details>
         </footer>
 
     </div>
 
-    <!-- [NEW] Image Modal Lightbox -->
+    <!-- Image Modal Lightbox -->
     <div id="image-modal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50 hidden transition-opacity duration-300"
          style="backdrop-filter: blur(5px);">
         <div class="relative max-w-3xl max-h-full">
@@ -136,229 +162,421 @@
     </div>
 
 
-    <script>
+    <!-- [NEW] Firebase SDKs -->
+    <script type="module">
+        // Firebase SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            onSnapshot, 
+            query, 
+            orderBy, 
+            serverTimestamp,
+            setLogLevel // for debugging
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // DOM 요소 가져오기
         const sheetUrlInput = document.getElementById('sheet-url');
         const loadButton = document.getElementById('load-button');
         const pickButton = document.getElementById('pick-button');
         const resultText = document.getElementById('result-text');
-        const statusMessage = document.getElementById('status-message');
-        
-        // 상세 정보 DOM 요소
-        const detailsContainer = document.getElementById('result-details');
-        const locationInfoDiv = document.getElementById('location-info');
-        const locationImage = document.getElementById('location-image'); // '가는 길' 이미지 태그
+        const loadingText = document.getElementById('loading-text');
+        const errorText = document.getElementById('error-text');
+        const resultDetails = document.getElementById('result-details');
+        const locationInfo = document.getElementById('location-info');
+        const locationImage = document.getElementById('location-image');
         const menuImage = document.getElementById('menu-image');
         const foodImage = document.getElementById('food-image');
+        const geminiSuggestionBox = document.getElementById('gemini-suggestion-box');
+        const geminiSuggestionText = document.getElementById('gemini-suggestion-text');
 
-        // [NEW] Modal elements
+        // Modal elements
         const imageModal = document.getElementById('image-modal');
         const modalImageContent = document.getElementById('modal-image-content');
         const modalClose = document.getElementById('modal-close');
 
+        // [NEW] Review elements
+        const reviewSection = document.getElementById('review-section');
+        const reviewInput = document.getElementById('review-input');
+        const submitReviewButton = document.getElementById('submit-review-button');
+        const reviewList = document.getElementById('review-list');
+        const reviewPlaceholder = document.getElementById('review-placeholder');
 
+        // 전역 변수
         let menuList = [];
+        let isSpinning = false;
 
-        // 로컬 저장소에서 URL 불러오기 (하드코딩 제거, localStorage 사용으로 복원)
-        (function loadUrlFromStorage() {
-            // 사용자가 제공한 URL을 input 값으로 직접 설정
-            const savedUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSHqg-V9dLAbA_a30oHi1d7fF6UdyuDnIDu7yrJfC9kXuJnu2ow0ZeuSkdkGeZ1reVi878U27s4Hll3/pub?output=csv';
-            if (savedUrl) {
-                sheetUrlInput.value = savedUrl;
-                loadMenus(); // URL이 있으면 자동으로 불러오기
+        // [NEW] Firebase and Review variables
+        let db, auth, appId, userId;
+        let currentPickedItem = null;
+        let currentReviewUnsubscribe = null; // 현재 구독중인 리뷰 리스너
+
+        // --- [NEW] Firebase 초기화 및 인증 ---
+        async function initializeFirebase() {
+            try {
+                // __firebase_config와 __app_id는 캔버스 환경에서 자동으로 제공됩니다.
+                const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
+                const firebaseConfig = JSON.parse(firebaseConfigStr);
+                
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-lunch-app';
+
+                if (!firebaseConfig.apiKey) {
+                    console.error("Firebase config is missing.");
+                    errorText.textContent = "리뷰 기능을 초기화할 수 없습니다.";
+                    errorText.classList.remove('hidden');
+                    return;
+                }
+
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug'); // 디버그 로그 활성화
+
+                // 인증 (커스텀 토큰 또는 익명)
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                
+                userId = auth.currentUser?.uid || `anon-${Math.random().toString(36).substr(2, 9)}`;
+                console.log("Firebase initialized. User ID:", userId);
+                
+            } catch (err) {
+                console.error("Firebase init error:", err);
+                errorText.textContent = `리뷰 기능 오류: ${err.message}`;
+                errorText.classList.remove('hidden');
             }
-        })();
-        
-        // 메뉴 불러오기 함수
+        }
+
+        // --- Gemini API 호출 함수 ---
+        async function getGeminiSuggestion(menuName) {
+            // ... (Gemini API 함수 - 기존과 동일)
+            geminiSuggestionBox.classList.remove('hidden');
+            geminiSuggestionText.textContent = "AI가 추천 이유를 생성 중입니다...";
+
+            const apiKey = ""; // API 키 (캔버스 환경에서 자동 제공)
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            
+            const systemPrompt = "You are a witty and enthusiastic food critic. Your job is to provide a compelling, fun, and slightly exaggerated reason why the chosen lunch menu is the absolute perfect choice for today. Respond in Korean, in a single concise paragraph.";
+            const userQuery = `오늘 점심 메뉴로 '${menuName}'이(가) 뽑혔어. 왜 이게 오늘 점심으로 완벽한 선택인지 재치있게 추천해줘.`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                generationConfig: {
+                    temperature: 0.8,
+                    topP: 0.9,
+                }
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (text) {
+                    geminiSuggestionText.textContent = text;
+                } else {
+                    throw new Error("No content found in API response.");
+                }
+
+            } catch (error) {
+                console.error('Error fetching Gemini suggestion:', error);
+                geminiSuggestionText.textContent = 'AI가 지금 바쁜가 봐요. 맛있게 드세요!';
+            }
+        }
+
+
+        // --- 메뉴 불러오기 함수 ---
         async function loadMenus() {
-            const url = sheetUrlInput.value.trim();
+            // ... (기존 loadMenus 함수 로직)
+            const url = sheetUrlInput.value;
             if (!url) {
-                showStatus('URL을 입력해주세요.', 'error');
+                errorText.textContent = 'Google Sheets URL을 입력하세요.';
+                errorText.classList.remove('hidden');
                 return;
             }
 
-            // 구글 시트 CSV URL이 맞는지 간단히 확인
-            if (!url.startsWith('https://docs.google.com/spreadsheets/d/e/') || !url.endsWith('output=csv')) {
-                 showStatus('유효한 Google Sheets .csv 게시 URL이 아닙니다.', 'error');
-                 return;
-            }
+            loadingText.classList.remove('hidden');
+            errorText.classList.add('hidden');
+            pickButton.disabled = true;
 
-            showStatus('메뉴를 불러오는 중...', 'loading');
-            
             try {
-                // Google Sheets CSV는 캐시 문제가 있을 수 있어, 타임스탬프를 추가해 강제로 새로고침
-                const res = await fetch(`${url}&t=${new Date().getTime()}`);
-                
-                if (!res.ok) {
-                    throw new Error(`네트워크 응답 오류: ${res.statusText}`);
+                // 캐시 방지를 위해 타임스탬프 추가
+                const fetchUrl = `${url}&_t=${new Date().getTime()}`;
+                const response = await fetch(fetchUrl);
+                if (!response.ok) {
+                    throw new Error('네트워크 응답이 올바르지 않습니다.');
                 }
-
-                const csvText = await res.text();
+                const csvText = await response.text();
                 
-                // CSV 파싱: 각 줄을 메뉴 객체로 취급
-                menuList = csvText
-                    .split('\n')
+                menuList = csvText.split('\n')
+                    .map(row => row.trim())
+                    .filter(row => row.length > 0)
                     .map(row => {
-                        // CSV는 쉼표로 열을 구분합니다.
-                        // 따옴표로 묶인 쉼표를 무시하는 간단한 CSV 파서
-                        const columns = [];
-                        let inQuote = false;
-                        let currentColumn = '';
-                        for (let i = 0; i < row.length; i++) {
-                            const char = row[i];
-                            
-                            if (char === '"' && (i === 0 || row[i-1] !== '\\')) {
-                                inQuote = !inQuote;
-                            } else if (char === ',' && !inQuote) {
-                                columns.push(currentColumn.trim().replace(/^"|"$/g, '')); // 앞뒤 따옴표 제거
-                                currentColumn = '';
-                            } else {
-                                currentColumn += char;
-                            }
-                        }
-                        columns.push(currentColumn.trim().replace(/^"|"$/g, '')); // 마지막 열 추가
-
-                        
-                        const name = columns[0] ? columns[0].trim() : null;
-                        if (!name) return null; // A열(이름)이 없으면 그 줄은 무시
-
+                        // CSV 파싱 (따옴표로 묶인 쉼표 무시 - 간단한 버전)
+                        // 더 복잡한 CSV는 라이브러리가 필요하지만, 이 경우 4개 열로 가정합니다.
+                        const parts = row.split(','); // 간단한 쉼표 구분
                         return {
-                            name: name,
-                            locationImg: columns[1] ? columns[1].trim() : null, // B열: 위치 이미지 URL
-                            menuImg: columns[2] ? columns[2].trim() : null,  // C열: 메뉴판 URL
-                            foodImg: columns[3] ? columns[3].trim() : null   // D열: 음식 URL
+                            name: parts[0] || '이름 없음',
+                            locationImg: parts[1] || '', // B열: 가는 길 이미지
+                            menuImg: parts[2] || '',     // C열: 메뉴판 이미지
+                            foodImg: parts[3] || ''      // D열: 음식 이미지
                         };
                     })
-                    .filter(item => item !== null && item.name.length > 0); // 유효한 항목만 필터링
+                    .filter(item => item.name !== '이름 없음' && item.name.length > 0); // 이름이 있는 메뉴만 필터링
 
                 if (menuList.length === 0) {
-                    showStatus('메뉴를 찾을 수 없습니다. 시트 A열에 메뉴가 있는지 확인하세요.', 'error');
-                    pickButton.disabled = true;
-                } else {
-                    showStatus(`${menuList.length}개의 메뉴를 불러왔습니다!`, 'success');
-                    pickButton.disabled = false;
-                    // URL을 로컬 저장소에 저장 (복원)
-                    // localStorage.setItem('lunchRouletteSheetUrl', url); // URL이 하드코딩되었으므로 저장할 필요 없음
+                    throw new Error('시트에서 메뉴를 찾을 수 없거나 A열이 비어있습니다.');
                 }
                 
+                pickButton.disabled = false;
+                resultText.textContent = "메뉴 준비 완료!";
+
             } catch (error) {
-                console.error('메뉴 불러오기 실패:', error);
-                showStatus('메뉴 불러오기에 실패했습니다. URL을 확인해주세요.', 'error');
-                pickButton.disabled = true;
+                console.error('Error loading menus:', error);
+                errorText.textContent = `메뉴 로드 실패: ${error.message}`;
+                errorText.classList.remove('hidden');
+            } finally {
+                loadingText.classList.add('hidden');
             }
         }
 
-        // 메뉴 뽑기 함수
+        // --- 메뉴 뽑기 함수 ---
         function pickMenu() {
-            if (menuList.length === 0) {
-                showStatus('먼저 메뉴를 불러와주세요.', 'error');
+            if (isSpinning || menuList.length === 0) return;
+
+            isSpinning = true;
+            pickButton.disabled = true;
+            resultDetails.classList.add('hidden'); // 이전 결과 숨기기
+            geminiSuggestionBox.classList.add('hidden'); // 이전 AI 추천 숨기기
+            reviewSection.classList.add('hidden'); // [NEW] 이전 리뷰 숨기기
+
+            // 룰렛 애니메이션
+            resultText.classList.add('spinning');
+            resultText.style.transform = 'scale(0.8)';
+            
+            let spinCount = 0;
+            const spinInterval = setInterval(() => {
+                spinCount++;
+                const randomItem = menuList[Math.floor(Math.random() * menuList.length)];
+                resultText.textContent = randomItem.name;
+                
+                if (spinCount > 20) { // 약 2초간 스핀 (20 * 100ms)
+                    clearInterval(spinInterval);
+                    
+                    // 최종 메뉴 선택
+                    const pickedItem = menuList[Math.floor(Math.random() * menuList.length)];
+                    currentPickedItem = pickedItem; // [NEW] 현재 뽑힌 메뉴 저장
+
+                    resultText.textContent = pickedItem.name;
+                    resultText.classList.remove('spinning');
+                    resultText.classList.add('result-pop');
+                    resultText.style.transform = 'scale(1)';
+
+                    // 애니메이션 끝난 후 상세 정보 표시
+                    setTimeout(() => {
+                        updateResultDetails(pickedItem);
+                        resultText.classList.remove('result-pop');
+                        isSpinning = false;
+                        pickButton.disabled = false;
+                        // AI 추천 호출
+                        getGeminiSuggestion(pickedItem.name);
+                        // [NEW] 리뷰 로드
+                        if(db) { // Firestore가 성공적으로 초기화되었을 때만
+                            loadReviews(pickedItem.name);
+                        }
+                    }, 500); // pop 애니메이션 시간
+                }
+            }, 100); // 100ms 마다 이름 변경
+        }
+
+        // --- 결과 상세 정보 업데이트 ---
+        function updateResultDetails(item) {
+            // ... (기존 updateResultDetails 함수 로직)
+            // B열: 가는 길 이미지
+            if (item.locationImg) {
+                locationImage.src = item.locationImg;
+                locationInfo.classList.remove('hidden');
+            } else {
+                locationInfo.classList.add('hidden');
+            }
+            // C열: 메뉴판 이미지
+            menuImage.src = item.menuImg || 'https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu';
+            // D열: 음식 이미지
+            foodImage.src = item.foodImg || 'https://placehold.co/300x300/e2e8f0/94a3b8?text=Food';
+
+            resultDetails.classList.remove('hidden');
+        }
+
+        // [NEW] --- 리뷰 불러오기 (Firestore onSnapshot) ---
+        function loadReviews(restaurantName) {
+            if (!db || !appId) return;
+
+            // 기존에 구독중인 리스너가 있다면 해제 (다른 메뉴를 뽑았을 경우)
+            if (currentReviewUnsubscribe) {
+                currentReviewUnsubscribe();
+            }
+
+            reviewSection.classList.remove('hidden');
+            reviewList.innerHTML = ''; // 기존 목록 비우기
+            reviewPlaceholder.textContent = '리뷰를 불러오는 중...';
+            reviewPlaceholder.classList.remove('hidden');
+
+            // Firestore 경로 생성
+            const collectionPath = `artifacts/${appId}/public/data/lunch-reviews/${restaurantName}/reviews`;
+            const reviewsCollection = collection(db, collectionPath);
+            
+            // 타임스탬프 기준으로 내림차순 정렬 쿼리
+            const q = query(reviewsCollection, orderBy("timestamp", "desc"));
+
+            console.log(`Listening for reviews at: ${collectionPath}`);
+
+            // 실시간 리스너 구독
+            currentReviewUnsubscribe = onSnapshot(q, (snapshot) => {
+                reviewList.innerHTML = ''; // 목록 다시 비우기
+                if (snapshot.empty) {
+                    reviewPlaceholder.textContent = '아직 리뷰가 없습니다. 첫 리뷰를 남겨주세요!';
+                    reviewPlaceholder.classList.remove('hidden');
+                } else {
+                    reviewPlaceholder.classList.add('hidden');
+                    snapshot.forEach((doc) => {
+                        const review = doc.data();
+                        const reviewEl = document.createElement('div');
+                        reviewEl.className = 'bg-white p-3 rounded-md shadow-sm border border-gray-200';
+                        
+                        const textEl = document.createElement('p');
+                        textEl.textContent = review.text;
+                        textEl.className = 'text-gray-800';
+                        reviewEl.appendChild(textEl);
+
+                        if (review.timestamp) {
+                            const dateEl = document.createElement('p');
+                            dateEl.textContent = new Date(review.timestamp.seconds * 1000).toLocaleString('ko-KR');
+                            dateEl.className = 'text-xs text-gray-400 mt-1 text-right';
+                            reviewEl.appendChild(dateEl);
+                        }
+                        reviewList.appendChild(reviewEl);
+                    });
+                }
+            }, (error) => {
+                console.error("Error fetching reviews: ", error);
+                reviewPlaceholder.textContent = '리뷰를 불러오는 중 오류가 발생했습니다.';
+                reviewPlaceholder.classList.remove('hidden');
+            });
+        }
+
+        // [NEW] --- 리뷰 제출 함수 (Firestore addDoc) ---
+        async function submitReview() {
+            if (!db || !appId || !currentPickedItem) return;
+
+            const reviewText = reviewInput.value.trim();
+            if (reviewText.length === 0) {
+                alert("리뷰 내용을 입력해주세요.");
                 return;
             }
 
-            // 뽑기 시작 시, 이전 상세 정보 숨기기
-            detailsContainer.classList.add('hidden');
-            
-            // 결과 텍스트 초기화 (애니메이션 재실행을 위해)
-            resultText.classList.remove('result-pop');
-            void resultText.offsetWidth; // 리플로우 강제
+            submitReviewButton.disabled = true;
+            submitReviewButton.textContent = "등록중...";
 
-            // 메뉴 뽑기 로직
-            const randomIndex = Math.floor(Math.random() * menuList.length);
-            const pickedItem = menuList[randomIndex]; // 이제 문자열이 아닌 객체입니다.
-
-            // 룰렛 효과 (여러 메뉴를 빠르게 보여줌)
-            let intervalCount = 0;
-            const maxIntervals = 15 + Math.floor(Math.random() * 10); // 15~25회 랜덤
-            const interval = setInterval(() => {
-                const randomItem = menuList[Math.floor(Math.random() * menuList.length)];
-                resultText.textContent = randomItem.name; // 객체의 'name' 속성을 표시
-                resultText.classList.remove('text-blue-600');
-                resultText.classList.add('text-gray-400'); // 룰렛 중에는 회색으로
+            try {
+                const restaurantName = currentPickedItem.name;
+                const collectionPath = `artifacts/${appId}/public/data/lunch-reviews/${restaurantName}/reviews`;
                 
-                intervalCount++;
+                await addDoc(collection(db, collectionPath), {
+                    text: reviewText,
+                    author: userId, // 익명 ID 또는 사용자 ID
+                    timestamp: serverTimestamp() // 서버 시간 기준 타임스탬프
+                });
 
-                if (intervalCount > maxIntervals) {
-                    clearInterval(interval);
-                    // 최종 결과 표시
-                    resultText.textContent = pickedItem.name; // 최종 이름 표시
-                    resultText.classList.remove('text-gray-400');
-                    resultText.classList.add('text-blue-600'); // 최종 결과는 파란색으로
-                    resultText.classList.add('result-pop'); // 애니메이션 적용
+                reviewInput.value = ''; // 입력창 비우기
 
-                    // ★ 상세 정보 표시 함수 호출 ★
-                    updateResultDetails(pickedItem);
+            } catch (error) {
+                console.error("Error adding review: ", error);
+                alert(`리뷰 등록 중 오류가 발생했습니다: ${error.message}`);
+            } finally {
+                submitReviewButton.disabled = false;
+                submitReviewButton.textContent = "등록";
+            }
+        }
+
+
+        // --- 이벤트 리스너 ---
+        function setupEventListeners() {
+            loadButton.addEventListener('click', loadMenus);
+            pickButton.addEventListener('click', pickMenu);
+
+            // Modal functionality
+            function openModal(src) {
+                if (src && !src.includes('placehold.co')) { 
+                    modalImageContent.src = src;
+                    imageModal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
                 }
-            }, 80); // 80ms 마다 메뉴 변경
+            }
+
+            function closeModal() {
+                imageModal.classList.add('hidden');
+                document.body.style.overflow = 'auto';
+                modalImageContent.src = '';
+            }
+
+            locationImage.addEventListener('click', () => openModal(locationImage.src));
+            menuImage.addEventListener('click', () => openModal(menuImage.src));
+            foodImage.addEventListener('click', () => openModal(foodImage.src));
+
+            modalClose.addEventListener('click', closeModal);
+            imageModal.addEventListener('click', (e) => {
+                if (e.target === imageModal) {
+                    closeModal();
+                }
+            });
+
+            // [NEW] Review submit listener
+            submitReviewButton.addEventListener('click', submitReview);
+            reviewInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    submitReview();
+                }
+            });
         }
 
-        // ★ [수정] 뽑힌 메뉴의 상세 정보를 업데이트하는 함수
-        function updateResultDetails(item) {
+        // --- 페이지 로드 시 실행 ---
+        // DOM이 로드된 후 스크립트 실행
+        window.addEventListener('DOMContentLoaded', async () => {
+            console.log("DOM 로드 완료. 스크립트 실행 시작.");
+
+            // [NEW] Firebase 초기화
+            await initializeFirebase();
             
-            // 1. 위치 이미지 (B열)
-            if (item.locationImg && item.locationImg.length > 0) {
-                locationImage.src = item.locationImg;
-                locationInfoDiv.classList.remove('hidden');
-            } else {
-                locationInfoDiv.classList.add('hidden');
-                locationImage.src = 'https://placehold.co/600x400/e2e8f0/94a3b8?text=Location'; // 리셋
-            }
-
-            // 2. 메뉴판 이미지 (C열)
-            menuImage.src = item.menuImg || 'https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu';
-
-            // 3. 음식 사진 (D열)
-            foodImage.src = item.foodImg || 'https://placehold.co/300x300/e2e8f0/94a3b8?text=Food';
-
-            // 상세 정보 컨테이너 표시
-            detailsContainer.classList.remove('hidden');
-        }
-
-        // 상태 메시지 표시 함수
-        function showStatus(message, type) {
-            statusMessage.textContent = message;
-            statusMessage.classList.remove('text-green-600', 'text-red-600', 'text-gray-500');
-
-            if (type === 'success') {
-                statusMessage.classList.add('text-green-600');
-            } else if (type === 'error') {
-                statusMessage.classList.add('text-red-600');
-            } else {
-                statusMessage.classList.add('text-gray-500');
-            }
-        }
-
-        // 이벤트 리스너 연결
-        loadButton.addEventListener('click', loadMenus);
-        pickButton.addEventListener('click', pickMenu);
-        
-        // [NEW] Modal functionality
-        function openModal(src) {
-            // src가 유효하고, 플레이스홀더 이미지가 아닌 경우에만 모달 열기
-            if (src && !src.includes('placehold.co')) { 
-                modalImageContent.src = src;
-                imageModal.classList.remove('hidden');
-                document.body.style.overflow = 'hidden'; // 뒷배경 스크롤 방지
-            }
-        }
-
-        function closeModal() {
-            imageModal.classList.add('hidden');
-            document.body.style.overflow = 'auto'; // 스크롤 복원
-            modalImageContent.src = ''; // 이미지 소스 초기화
-        }
-
-        // [NEW] Image click listeners
-        locationImage.addEventListener('click', () => openModal(locationImage.src));
-        menuImage.addEventListener('click', () => openModal(menuImage.src));
-        foodImage.addEventListener('click', () => openModal(foodImage.src));
-
-        // [NEW] Modal close listeners
-        modalClose.addEventListener('click', closeModal);
-        imageModal.addEventListener('click', (e) => {
-            // 모달의 검은색 배경(e.target)을 클릭했을 때 닫기
-            if (e.target === imageModal) {
-                closeModal();
+            // 이벤트 리스너 설정
+            setupEventListeners();
+            
+            // 하드코딩된 URL 설정 및 자동 로드
+            const hardcodedUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHqg-V9dLAbA_a30oHi1d7fF6UdyuDnIDu7yrJfC9kXuJnu2ow0ZeuSkdkGeZ1reVi878U27s4Hll3/pub?output=csv";
+            sheetUrlInput.value = hardcodedUrl;
+            
+            // 페이지 로드 시 자동으로 메뉴 불러오기
+            if (hardcodedUrl) {
+                await loadMenus();
             }
         });
+
     </script>
 </body>
 </html>
