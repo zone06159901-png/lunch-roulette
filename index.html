@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘 뭐 먹지? 점심 룰렛</title>
+    <!-- Tailwind CSS 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Noto Sans KR 폰트를 기본으로 사용 */
+        body {
+            font-family: 'Noto Sans KR', 'Inter', sans-serif;
+        }
+        /* 뽑기 애니메이션 */
+        @keyframes pop {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .result-pop {
+            animation: pop 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 md:p-8">
+        
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">오늘 뭐 먹지? 🍱</h1>
+            <p class="text-gray-500 mt-2">회사 점심 메뉴 룰렛</p>
+        </header>
+
+        <main>
+            <!-- 1. 구글 시트 URL 입력 (다시 보이도록 수정) -->
+            <div class="mb-4 hidden">
+                <label for="sheet-url" class="block text-sm font-medium text-gray-700 mb-1">
+                    Google Sheets CSV URL
+                </label>
+                <input type="url" id="sheet-url" placeholder="웹에 게시한 .csv URL을 붙여넣으세요"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+            </div>
+
+            <!-- '메뉴 불러오기' 버튼 (다시 보이도록 수정) -->
+            <button id="load-button"
+                    class="w-full bg-blue-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-blue-700 transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hidden">
+                메뉴 불러오기
+            </button>
+            <p id="status-message" class="text-xs text-center text-gray-500 mt-2 h-4"></p>
+
+            <!-- 2. 메뉴 뽑기 -->
+            <div class="mt-6 border-t pt-6 text-center">
+                <button id="pick-button"
+                        class="w-full bg-green-500 text-white text-lg font-bold py-3 px-6 rounded-lg hover:bg-green-600 transition-transform transform hover:scale-105 duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        disabled>
+                    오늘의 메뉴 뽑기! 🥳
+                </button>
+            </div>
+
+            <!-- 3. 결과 표시 -->
+            <div id="result-container" class="mt-6 text-center min-h-[100px] flex flex-col items-center justify-center">
+                <!-- 룰렛 텍스트 -->
+                <p id="result-text" class="text-4xl font-extrabold text-blue-600"></p>
+                
+                <!-- 상세 정보 (숨겨져 있다가 뽑기 완료 후 표시) -->
+                <div id="result-details" class="hidden w-full mt-6 space-y-4">
+                    
+                    <!-- 가는 길/위치 (이미지로 변경) -->
+                    <div id="location-info" class="hidden">
+                        <p class="text-sm font-medium text-gray-500 mb-1">위치/가는 길</p>
+                        <img id="location-image" src="https://placehold.co/600x400/e2e8f0/94a3b8?text=Location" alt="위치/가는 길 이미지" class="w-full h-auto rounded-lg shadow-md aspect-video object-cover" 
+                             onerror="this.src='https://placehold.co/600x400/e2e8f0/94a3b8?text=Location'; this.alt='위치/가는 길 이미지 없음';">
+                    </div>
+                    
+                    <!-- 이미지 갤러리 (메뉴판, 음식) -->
+                    <div class="grid grid-cols-2 gap-4 mt-4">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500 mb-1">메뉴판</p>
+                            <img id="menu-image" src="https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu" alt="메뉴판 이미지" class="w-full h-auto rounded-lg shadow-md aspect-square object-cover" 
+                                 onerror="this.src='https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu'; this.alt='메뉴판 이미지 없음';">
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-500 mb-1">후기/음식 사진</p>
+                            <img id="food-image" src="https://placehold.co/300x300/e2e8f0/94a3b8?text=Food" alt="음식 사진" class="w-full h-auto rounded-lg shadow-md aspect-square object-cover"
+                                 onerror="this.src='https://placehold.co/300x300/e2e8f0/94a3b8?text=Food'; this.alt='음식 사진 없음';">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- 사용 방법 안내 (B열 내용 수정) -->
+        <footer class="mt-6 border-t pt-4">
+            <details class="text-gray-600">
+                <summary class="cursor-pointer text-sm font-medium hover:text-gray-800">
+                    ℹ️ Google Sheets 설정 방법
+                </summary>
+                <div class="mt-2 p-3 bg-gray-50 rounded-lg text-xs space-y-1">
+                    <p class="font-bold">반드시 열 순서를 지켜주세요:</p>
+                    <p>∙ <span class="font-semibold">A열:</span> 식당/메뉴 이름 (필수)</p>
+                    <p>∙ <span class="font-semibold">B열:</span> 가는 길/위치 <span class="text-red-600 font-bold">사진 (URL)</span></p>
+                    <p>∙ <span class="font-semibold">C열:</span> 메뉴판 사진 (URL)</p>
+                    <p>∙ <span class="font-semibold">D열:</span> 음식 사진 (URL)</p>
+                    <p class="mt-2">1. Google Sheets에서 위 순서대로 내용을 입력하세요.</p>
+                    <p>2. <span class="font-semibold text-red-600">주의:</span> 모든 이미지는 직접 넣지 말고, 이미지의 'URL 주소'를 B, C, D열에 텍스트로 붙여넣으세요.</p>
+                    <p>3. [파일] > [공유] > [웹에 게시]로 이동하세요.</p>
+                    <p>4. '링크' 탭에서 시트를 선택하고, 형식을 '.csv'로 변경하세요.</p>
+                    <p>5. [게시]를 누르고 생성된 URL을 복사해 위에 붙여넣으세요.</p>
+                </div>
+            </details>
+        </footer>
+
+    </div>
+
+    <script>
+        const sheetUrlInput = document.getElementById('sheet-url');
+        const loadButton = document.getElementById('load-button');
+        const pickButton = document.getElementById('pick-button');
+        const resultText = document.getElementById('result-text');
+        const statusMessage = document.getElementById('status-message');
+        
+        // 상세 정보 DOM 요소
+        const detailsContainer = document.getElementById('result-details');
+        const locationInfoDiv = document.getElementById('location-info');
+        const locationImage = document.getElementById('location-image'); // '가는 길' 이미지 태그
+        const menuImage = document.getElementById('menu-image');
+        const foodImage = document.getElementById('food-image');
+
+
+        let menuList = [];
+
+        // 로컬 저장소에서 URL 불러오기 (하드코딩 제거, localStorage 사용으로 복원)
+        (function loadUrlFromStorage() {
+            // 사용자가 제공한 URL을 input 값으로 직접 설정
+            const savedUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSHqg-V9dLAbA_a30oHi1d7fF6UdyuDnIDu7yrJfC9kXuJnu2ow0ZeuSkdkGeZ1reVi878U27s4Hll3/pub?output=csv';
+            if (savedUrl) {
+                sheetUrlInput.value = savedUrl;
+                loadMenus(); // URL이 있으면 자동으로 불러오기
+            }
+        })();
+        
+        // 메뉴 불러오기 함수
+        async function loadMenus() {
+            const url = sheetUrlInput.value.trim();
+            if (!url) {
+                showStatus('URL을 입력해주세요.', 'error');
+                return;
+            }
+
+            // 구글 시트 CSV URL이 맞는지 간단히 확인
+            if (!url.startsWith('https://docs.google.com/spreadsheets/d/e/') || !url.endsWith('output=csv')) {
+                 showStatus('유효한 Google Sheets .csv 게시 URL이 아닙니다.', 'error');
+                 return;
+            }
+
+            showStatus('메뉴를 불러오는 중...', 'loading');
+            
+            try {
+                // Google Sheets CSV는 캐시 문제가 있을 수 있어, 타임스탬프를 추가해 강제로 새로고침
+                const res = await fetch(`${url}&t=${new Date().getTime()}`);
+                
+                if (!res.ok) {
+                    throw new Error(`네트워크 응답 오류: ${res.statusText}`);
+                }
+
+                const csvText = await res.text();
+                
+                // CSV 파싱: 각 줄을 메뉴 객체로 취급
+                menuList = csvText
+                    .split('\n')
+                    .map(row => {
+                        // CSV는 쉼표로 열을 구분합니다.
+                        // 따옴표로 묶인 쉼표를 무시하는 간단한 CSV 파서
+                        const columns = [];
+                        let inQuote = false;
+                        let currentColumn = '';
+                        for (let i = 0; i < row.length; i++) {
+                            const char = row[i];
+                            
+                            if (char === '"' && (i === 0 || row[i-1] !== '\\')) {
+                                inQuote = !inQuote;
+                            } else if (char === ',' && !inQuote) {
+                                columns.push(currentColumn.trim().replace(/^"|"$/g, '')); // 앞뒤 따옴표 제거
+                                currentColumn = '';
+                            } else {
+                                currentColumn += char;
+                            }
+                        }
+                        columns.push(currentColumn.trim().replace(/^"|"$/g, '')); // 마지막 열 추가
+
+                        
+                        const name = columns[0] ? columns[0].trim() : null;
+                        if (!name) return null; // A열(이름)이 없으면 그 줄은 무시
+
+                        return {
+                            name: name,
+                            locationImg: columns[1] ? columns[1].trim() : null, // B열: 위치 이미지 URL
+                            menuImg: columns[2] ? columns[2].trim() : null,  // C열: 메뉴판 URL
+                            foodImg: columns[3] ? columns[3].trim() : null   // D열: 음식 URL
+                        };
+                    })
+                    .filter(item => item !== null && item.name.length > 0); // 유효한 항목만 필터링
+
+                if (menuList.length === 0) {
+                    showStatus('메뉴를 찾을 수 없습니다. 시트 A열에 메뉴가 있는지 확인하세요.', 'error');
+                    pickButton.disabled = true;
+                } else {
+                    showStatus(`${menuList.length}개의 메뉴를 불러왔습니다!`, 'success');
+                    pickButton.disabled = false;
+                    // URL을 로컬 저장소에 저장 (복원)
+                    // localStorage.setItem('lunchRouletteSheetUrl', url); // URL이 하드코딩되었으므로 저장할 필요 없음
+                }
+                
+            } catch (error) {
+                console.error('메뉴 불러오기 실패:', error);
+                showStatus('메뉴 불러오기에 실패했습니다. URL을 확인해주세요.', 'error');
+                pickButton.disabled = true;
+            }
+        }
+
+        // 메뉴 뽑기 함수
+        function pickMenu() {
+            if (menuList.length === 0) {
+                showStatus('먼저 메뉴를 불러와주세요.', 'error');
+                return;
+            }
+
+            // 뽑기 시작 시, 이전 상세 정보 숨기기
+            detailsContainer.classList.add('hidden');
+            
+            // 결과 텍스트 초기화 (애니메이션 재실행을 위해)
+            resultText.classList.remove('result-pop');
+            void resultText.offsetWidth; // 리플로우 강제
+
+            // 메뉴 뽑기 로직
+            const randomIndex = Math.floor(Math.random() * menuList.length);
+            const pickedItem = menuList[randomIndex]; // 이제 문자열이 아닌 객체입니다.
+
+            // 룰렛 효과 (여러 메뉴를 빠르게 보여줌)
+            let intervalCount = 0;
+            const maxIntervals = 15 + Math.floor(Math.random() * 10); // 15~25회 랜덤
+            const interval = setInterval(() => {
+                const randomItem = menuList[Math.floor(Math.random() * menuList.length)];
+                resultText.textContent = randomItem.name; // 객체의 'name' 속성을 표시
+                resultText.classList.remove('text-blue-600');
+                resultText.classList.add('text-gray-400'); // 룰렛 중에는 회색으로
+                
+                intervalCount++;
+
+                if (intervalCount > maxIntervals) {
+                    clearInterval(interval);
+                    // 최종 결과 표시
+                    resultText.textContent = pickedItem.name; // 최종 이름 표시
+                    resultText.classList.remove('text-gray-400');
+                    resultText.classList.add('text-blue-600'); // 최종 결과는 파란색으로
+                    resultText.classList.add('result-pop'); // 애니메이션 적용
+
+                    // ★ 상세 정보 표시 함수 호출 ★
+                    updateResultDetails(pickedItem);
+                }
+            }, 80); // 80ms 마다 메뉴 변경
+        }
+
+        // ★ [수정] 뽑힌 메뉴의 상세 정보를 업데이트하는 함수
+        function updateResultDetails(item) {
+            
+            // 1. 위치 이미지 (B열)
+            if (item.locationImg && item.locationImg.length > 0) {
+                locationImage.src = item.locationImg;
+                locationInfoDiv.classList.remove('hidden');
+            } else {
+                locationInfoDiv.classList.add('hidden');
+                locationImage.src = 'https://placehold.co/600x400/e2e8f0/94a3b8?text=Location'; // 리셋
+            }
+
+            // 2. 메뉴판 이미지 (C열)
+            menuImage.src = item.menuImg || 'https://placehold.co/300x300/e2e8f0/94a3b8?text=Menu';
+
+            // 3. 음식 사진 (D열)
+            foodImage.src = item.foodImg || 'https://placehold.co/300x300/e2e8f0/94a3b8?text=Food';
+
+            // 상세 정보 컨테이너 표시
+            detailsContainer.classList.remove('hidden');
+        }
+
+        // 상태 메시지 표시 함수
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.classList.remove('text-green-600', 'text-red-600', 'text-gray-500');
+
+            if (type === 'success') {
+                statusMessage.classList.add('text-green-600');
+            } else if (type === 'error') {
+                statusMessage.classList.add('text-red-600');
+            } else {
+                statusMessage.classList.add('text-gray-500');
+            }
+        }
+
+        // 이벤트 리스너 연결
+        loadButton.addEventListener('click', loadMenus);
+        pickButton.addEventListener('click', pickMenu);
+    </script>
+</body>
+</html>
+
+
