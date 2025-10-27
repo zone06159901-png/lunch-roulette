@@ -85,6 +85,7 @@
         <p id="loading-text" class="text-center text-gray-500 mt-2 hidden">
             메뉴를 불러오는 중입니다...
         </p>
+        <!-- 오류 메시지 표시 영역 -->
         <p id="error-text" class="text-center text-red-500 mt-2 hidden"></p>
         
         <!-- 뽑힌 메뉴 상세 정보 (숨겨져 있음) -->
@@ -217,8 +218,7 @@
         // --- Firebase 초기화 및 인증 (GitHub Pages용) ---
         async function initializeFirebase() {
             try {
-                // [중요!] 여기에 1단계에서 복사한 firebaseConfig 객체를 붙여넣으세요.
-                // 이것은 사용자님 고유의 '열쇠'입니다.
+                // 사용자님의 Firebase '열쇠'
                 const firebaseConfig = {
                     apiKey: "AIzaSyBDyz1Ti1Oo8K44JHogdLKdGIQILTp2sgI",
                     authDomain: "my-lunch-roulette.firebaseapp.com",
@@ -229,16 +229,14 @@
                     measurementId: "G-T6GEZC0GG8"
                 };
 
-                // [중요!] Firestore 데이터 경로를 위한 고유 앱 ID
-                // (Firebase 프로젝트 ID와 달라도 됩니다. 우리 앱끼리 데이터를 구분하는 용도)
-                const appIdString = "my-lunch-roulette-app"; // 이 값을 사용합니다.
-
+                // Firestore 데이터 경로를 위한 고유 앱 ID
+                const appIdString = "my-lunch-roulette-app"; 
 
                 if (!firebaseConfig.apiKey) {
                     console.error("Firebase config is missing.");
                     errorText.textContent = "리뷰 기능을 초기화할 수 없습니다. (Config 누락)";
                     errorText.classList.remove('hidden');
-                    return;
+                    return false; // 초기화 실패
                 }
                 
                 appId = appIdString; // 전역 변수에 할당
@@ -248,18 +246,25 @@
                 auth = getAuth(app);
                 setLogLevel('Debug'); // 디버그 로그 활성화
 
-                // [FIXED] 익명 로그인 및 userId 할당 타이밍 문제 수정
-                // GitHub Pages에서는 항상 익명 로그인 사용
+                // 익명 로그인 및 userId 할당
                 console.log("Attempting anonymous sign-in...");
                 const userCredential = await signInAnonymously(auth);
-                userId = userCredential.user.uid; // 로그인 성공 직후 userId를 확실하게 할당
+                userId = userCredential.user.uid; 
                 
                 console.log("Firebase initialized for GitHub Pages. User ID:", userId);
+                return true; // 초기화 성공
                 
             } catch (err) {
                 console.error("Firebase init error:", err);
-                errorText.textContent = `리뷰 기능 오류: ${err.message}`;
+                
+                // [FIXED] '익명 로그인' 비활성화 오류 감지
+                if (err.code === 'auth/operation-not-allowed') {
+                    errorText.textContent = "리뷰 기능 오류: Firebase에서 '익명 로그인'이 활성화되지 않았습니다. (Firebase 콘솔 > Authentication > Sign-in method > 익명 > 활성화 필요)";
+                } else {
+                    errorText.textContent = `리뷰 기능 오류: ${err.message}`;
+                }
                 errorText.classList.remove('hidden');
+                return false; // 초기화 실패
             }
         }
 
@@ -381,7 +386,8 @@
                         } else {
                             console.warn("DB or UserID not ready, cannot load reviews.");
                             if (!db) errorText.textContent = "리뷰 DB에 연결되지 않았습니다.";
-                            if (!userId) errorText.textContent = "리뷰 사용자 인증에 실패했습니다.";
+                            // userId가 없는 경우는 initializeFirebase에서 이미 처리했으므로, 여기서 다시 표시할 필요는 없음.
+                            if (!userId && db) errorText.textContent = "리뷰 사용자 인증에 실패했습니다. (새로고침 필요)"; 
                             errorText.classList.remove('hidden');
                         }
                     }, 500); // pop 애니메이션 시간
@@ -477,10 +483,15 @@
 
         // --- 리뷰 제출 함수 (Firestore addDoc) ---
         async function submitReview() {
-            // [FIXED] userId가 확실히 있는지 다시 한번 확인
             if (!db || !appId || !currentPickedItem || !userId) {
                 console.error("Review submission failed. Missing critical data.", { db, appId, currentPickedItem, userId });
-                errorText.textContent = `리뷰 등록 오류: 사용자 인증(userId)이 누락되었습니다. 페이지를 새로고침해주세요.`;
+                // userId가 없으면 initializeFirebase에서 이미 오류를 띄웠으므로, 여기서는 더 구체적인 오류를 띄운다.
+                let errorMsg = "리뷰 등록 오류: ";
+                if (!userId) errorMsg += "사용자 인증(userId)이 누락되었습니다. 페이지를 새로고침해주세요.";
+                else if (!currentPickedItem) errorMsg += "메뉴가 선택되지 않았습니다.";
+                else errorMsg += "DB 연결이 끊겼습니다.";
+                
+                errorText.textContent = errorMsg;
                 errorText.classList.remove('hidden');
                 return;
             }
@@ -506,7 +517,7 @@
                 
                 await addDoc(collection(db, collectionPath), {
                     text: reviewText,
-                    author: userId, // [FIXED] 이제 userId가 확실히 보장됨
+                    author: userId, 
                     timestamp: serverTimestamp() // 서버 시간 기준 타임스탬프
                 });
 
@@ -568,18 +579,24 @@
             console.log("DOM 로드 완료. 스크립트 실행 시작.");
 
             // Firebase 초기화 (GitHub Pages용)
-            await initializeFirebase();
+            // [FIXED] 초기화 성공 여부를 (true/false)로 받음
+            const firebaseReady = await initializeFirebase();
             
             // 이벤트 리스너 설정
             setupEventListeners();
             
-            // 하드코딩된 URL 설정 및 자동 로드
+            // 하드코딩된 URL 설정
             const hardcodedUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHqg-V9dLAbA_a30oHi1d7fF6UdyuDnIDu7yrJfC9kXuJnu2ow0ZeuSkdkGeZ1reVi878U27s4Hll3/pub?output=csv";
             sheetUrlInput.value = hardcodedUrl;
             
-            // 페이지 로드 시 자동으로 메뉴 불러오기
-            if (hardcodedUrl) {
+            // [FIXED] Firebase가 성공적으로 준비된 경우에만 메뉴 로드
+            if (hardcodedUrl && firebaseReady) {
                 await loadMenus();
+            } else if (!firebaseReady) {
+                // Firebase 초기화 실패 시 (예: 익명 로그인 비활성화)
+                // 이미 initializeFirebase 함수에서 오류 메시지를 띄웠으므로 여기서는 버튼만 비활성화
+                pickButton.disabled = true;
+                resultText.textContent = "인증 실패";
             }
         });
 
